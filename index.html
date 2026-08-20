@@ -13,17 +13,41 @@
       <strong>RYŌKO</strong><span>凌鼓 · HTML5 Prototype</span>
       <button id="editorToggle">Chart Editor</button>
     </header>
+
     <section id="game" class="screen">
       <div class="hud"><div><span id="combo">0</span><small> COMBO</small></div><div id="score">000000</div><div id="health">♥♥♥♥♥</div></div>
-      <div id="arena" aria-label="Rhythm play area"><div id="player">◆</div><div id="feedback">READY</div></div>
+      <div id="arena" class="arena" aria-label="Rhythm play area"><div id="player">◆</div><div id="feedback">READY</div></div>
       <div class="controls"><button data-dir="left">←</button><button data-dir="up">↑</button><button data-dir="down">↓</button><button data-dir="right">→</button></div>
-      <div class="transport"><button id="start">Start</button><button id="restart">Restart</button><span id="time">0:00.000</span></div>
+      <div class="transport">
+        <button id="start">Start</button><button id="restart">Restart</button><span id="time">0:00.000</span>
+      </div>
+      <div class="song-loader">
+        <label class="file-button">Load song <input id="songInput" type="file" accept="audio/*" hidden></label>
+        <span id="songStatus">No song loaded — using silent clock</span>
+      </div>
     </section>
+
     <section id="editor" class="screen hidden">
-      <div class="editor-head"><div><b>CHART EDITOR</b><span id="editorTime">0:00.000</span></div><div class="editor-tools"><label>BPM <input id="bpm" type="number" min="30" max="300" value="150"></label><select id="noteType"><option value="tap">Tap</option><option value="swipe">Swipe</option><option value="hold">Hold</option></select><select id="direction"><option value="up">↑ Up</option><option value="right">→ Right</option><option value="down">↓ Down</option><option value="left">← Left</option></select></div></div>
-      <div id="timeline"><div id="grid"></div><div id="playhead"></div></div>
-      <div class="editor-actions"><button id="editorPlay">▶ Play</button><button id="addNote">＋ Add Note</button><button id="deleteNote">Delete Selected</button><button id="exportChart">Export JSON</button><button id="importChart">Import JSON</button><input id="fileInput" type="file" accept="application/json" hidden></div>
-      <p class="hint">Click the timeline to place a note. Drag notes to move them. Press Space to play/pause. Arrow keys test gameplay.</p>
+      <div class="editor-head">
+        <div><b>CHART EDITOR</b><span id="editorTime">0:00.000</span></div>
+        <div class="editor-tools">
+          <label>BPM <input id="bpm" type="number" min="30" max="300" value="150"></label>
+          <label>Snap <select id="snap"><option value="1">1/1</option><option value="2">1/2</option><option value="4" selected>1/4</option><option value="8">1/8</option><option value="16">1/16</option></select></label>
+          <select id="noteType"><option value="tap">Tap</option><option value="swipe">Swipe</option><option value="hold">Hold</option></select>
+          <select id="direction"><option value="up">↑ Up</option><option value="right">→ Right</option><option value="down">↓ Down</option><option value="left">← Left</option></select>
+        </div>
+      </div>
+      <div id="timeline" class="timeline"><div id="grid" class="grid"></div><div id="playhead" class="playhead"></div></div>
+      <div class="editor-actions">
+        <button id="editorPlay">▶ Play</button>
+        <button id="addNote">＋ Add Note</button>
+        <button id="deleteNote">Delete Selected</button>
+        <button id="exportChart">Export JSON</button>
+        <button id="importChart">Import JSON</button>
+        <label class="file-button">Load song <input id="editorSongInput" type="file" accept="audio/*" hidden></label>
+        <input id="fileInput" type="file" accept="application/json" hidden>
+      </div>
+      <p class="hint">Click the timeline to place a note. Click a note to select it, Delete to remove it. Space plays/pauses. Song files stay local in your browser and are not uploaded to GitHub.</p>
     </section>
   </main>
   <script type="module" src="src/game.js"></script>

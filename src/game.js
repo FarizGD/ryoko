@@ -5,7 +5,6 @@ import { ChartEditor } from './editor.js';
 import Phaser from 'phaser';
 import { GameplayScene } from './scenes/gameplay-scene.js';
 import monochromeFNF from '../charts/monochrome/monochrome-hard.json';
-import monochromeAudio from '../charts/monochrome/audio.ogg?url';
 import { readRyokoPackage, createRyokoPackage } from './song-package.js';
 
 const chart = new Chart();
@@ -34,6 +33,7 @@ let judgments={perfect:0,good:0,bad:0,miss:0};
 let renderingChart=false, chartRecorder=null, recordingChunks=[], renderPreviousBotplay=false;
 let recordingAudioContext=null, recordingAudioSource=null, recordingAudioDestination=null;
 let activePackage = null, currentAudioBlob = null, selectedCover = null, selectedPauseArt = null;
+let currentSongTitle=chart.title;
 const timing = { perfect: 70, great: 120, good: 180 };
 let launchToken = 0;
 let lastFeedbackAt=0, hudFrame=0;
@@ -57,7 +57,7 @@ pauseMenu.innerHTML = '<div class="pause-card"><div class="pause-art"><img src="
 pauseMenu.querySelector('img').onerror = event => { event.currentTarget.hidden = true; };
 $('gamePage').appendChild(pauseMenu);
 
-audio.src = monochromeAudio;
+audio.src = new URL('charts/monochrome/audio.ogg',document.baseURI).href;
 audio.load();
 clock.attachAudio(audio);
 $('selectedSongTitle').textContent = chart.title;
@@ -286,22 +286,23 @@ function loadSong(file) {
   if (songUrl) URL.revokeObjectURL(songUrl);
   songUrl = URL.createObjectURL(file);
   currentAudioBlob = file;
+  currentSongTitle=file.name.replace(/\.[^.]+$/,'');
   audio.src = songUrl;
   audio.load();
   clock.attachAudio(audio);
   reset();
   $('songStatus').textContent = `Loaded: ${file.name}`;
-  $('selectedSongTitle').textContent = file.name;
+  $('selectedSongTitle').textContent = currentSongTitle;
   $('selectedSongMeta').textContent = `${chart.bpm} BPM · Local audio`;
-  $('gameSongTitle').textContent = file.name;
-  $('editorSongTitle').textContent = file.name;
+  $('gameSongTitle').textContent = currentSongTitle;
+  $('editorSongTitle').textContent = currentSongTitle;
 }
 
 function updateSongLabels() {
-  $('selectedSongTitle').textContent = chart.title;
+  $('selectedSongTitle').textContent = currentSongTitle;
   $('selectedSongMeta').textContent = `${chart.bpm} BPM · ${chart.notes.filter(note => !note.auto).length} player notes · ${chart.scrollSpeed}× speed`;
-  $('gameSongTitle').textContent = chart.title;
-  $('editorSongTitle').textContent = chart.title;
+  $('gameSongTitle').textContent = currentSongTitle;
+  $('editorSongTitle').textContent = currentSongTitle;
   $('bpm').value = chart.bpm;
 }
 
@@ -312,6 +313,7 @@ async function loadPackage(file) {
     activePackage?.revoke();
     activePackage = loaded;
     chart.load(loaded.chartData);
+    currentSongTitle=loaded.manifest.song?.title||chart.title;
     clock.bpm = chart.bpm;
     audio.src = loaded.urls.audio;
     audio.load();
@@ -453,7 +455,7 @@ async function runCountdown(token) {
   loadingScreen.classList.add('countdown');
   for (const value of ['3', '2', '1', 'GO!']) {
     $('loadingCount').textContent = value;
-    $('loadingMessage').textContent = value === 'GO!' ? chart.title.toUpperCase() : 'GET READY';
+    $('loadingMessage').textContent = value === 'GO!' ? currentSongTitle.toUpperCase() : 'GET READY';
     await new Promise(resolve => setTimeout(resolve, value === 'GO!' ? 450 : 700));
     if (token !== launchToken) return false;
   }
@@ -486,7 +488,7 @@ function showResults(failed = false) {
   const accuracy = hits + misses ? hits / (hits + misses) * 100 : 0;
   const grade = failed ? 'F' : accuracy >= 98 ? 'S' : accuracy >= 90 ? 'A' : accuracy >= 80 ? 'B' : accuracy >= 70 ? 'C' : 'D';
   $('resultLabel').textContent = failed ? 'RUN FAILED' : 'SONG COMPLETE';
-  $('resultTitle').textContent = chart.title;
+  $('resultTitle').textContent = currentSongTitle;
   $('resultGrade').textContent = grade;
   $('finalScore').textContent = String(score).padStart(6, '0');
   $('finalAccuracy').textContent = `${accuracy.toFixed(2)}%`;
@@ -498,6 +500,7 @@ function showResults(failed = false) {
 $('songInput').onchange = e => loadSong(e.target.files[0]);
 $('editorSongInput').onchange = e => loadSong(e.target.files[0]);
 $('packageInput').onchange = e => { loadPackage(e.target.files[0]); e.target.value=''; };
+document.addEventListener('ryoko:chart-loaded',event => { currentSongTitle=event.detail?.title||chart.title; updateSongLabels(); });
 $('coverInput').onchange = e => {
   selectedCover = e.target.files[0] || null;
   if (selectedCover) { const image=document.querySelector('.song-art img'); image.src=URL.createObjectURL(selectedCover); image.hidden=false; }
@@ -700,6 +703,12 @@ audio.addEventListener('ended', () => {
   $('start').textContent = 'Start';
   $('editorPlay').textContent = '▶ Play';
   if (!$('gamePage').classList.contains('hidden')) showResults(false);
+});
+audio.addEventListener('error',() => {
+  if (!currentAudioBlob && !activePackage) {
+    clock.attachAudio(null);
+    $('songStatus').textContent='Example audio excluded — using silent clock';
+  }
 });
 
 function loop() {

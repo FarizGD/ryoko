@@ -87,6 +87,7 @@ export class ChartEditor {
       const f=e.target.files[0]; if(!f)return;
       try {
         this.chart.load(JSON.parse(await f.text()));
+        document.dispatchEvent(new CustomEvent('ryoko:chart-loaded',{detail:{title:this.chart.title}}));
         document.getElementById('bpm').value=this.chart.bpm;
         document.getElementById('editorSongTitle').textContent=this.chart.title;
         document.getElementById('gameSongTitle').textContent=this.chart.title;

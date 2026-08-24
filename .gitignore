@@ -2,3 +2,6 @@ node_modules/
 dist/
 .vite/
 *.log
+/charts/monochrome/audio.ogg
+/ryoko-taimuresu-chart/audio/song.ogg
+/ryoko-taimuresu-chart/*.ryoko

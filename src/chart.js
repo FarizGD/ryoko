@@ -9,6 +9,7 @@ export class Chart {
     this.offset = data.offset ?? data.song?.offset ?? 0;
     this.notes = (data.notes ?? []).map(note => ({ ...note }));
     this.bpmChanges = data.bpmChanges ?? [];
+    this.events = (data.events ?? []).map(event => ({ ...event }));
     this.scrollSpeed = data.scrollSpeed ?? data.song?.scrollSpeed ?? 1;
   }
 
@@ -49,11 +50,20 @@ export class Chart {
     }
 
     notes.sort((a, b) => a.time - b.time);
+    const events = [];
+    for (const group of source.events || []) {
+      const time = Math.max(0, Number(group?.[0]) || 0);
+      for (const raw of group?.[1] || []) {
+        events.push({ time, name: String(raw?.[0] || ''), value1: String(raw?.[1] ?? ''), value2: String(raw?.[2] ?? '') });
+      }
+    }
+    events.sort((a, b) => a.time - b.time);
     return {
       version: 1,
       song: { title: source.song || 'FNF Chart', artist: source.artist || 'Unknown', bpm: Number(source.bpm) || 120, offset: 0, scrollSpeed: Number(source.speed) || 1 },
       notes,
       bpmChanges,
+      events,
       source: { format: 'fnf', player1: source.player1, player2: source.player2, speed: source.speed }
     };
   }
@@ -75,6 +85,7 @@ export class Chart {
       song: { title: this.title, artist: this.artist, bpm: this.bpm, offset: this.offset, scrollSpeed: this.scrollSpeed },
       notes: this.notes.map(({ _hit, _expired, ...note }) => note),
       ...(this.bpmChanges.length ? { bpmChanges: this.bpmChanges } : {})
+      ,...(this.events.length ? { events: this.events.map(({ _fired, ...event }) => event) } : {})
     }, null, 2);
   }
 
@@ -88,6 +99,7 @@ export class Chart {
     this.scrollSpeed = normalized.song?.scrollSpeed ?? normalized.scrollSpeed ?? normalized.source?.speed ?? 1;
     this.notes = (normalized.notes ?? []).map(note => ({ ...note }));
     this.bpmChanges = (normalized.bpmChanges ?? []).map(change => ({ ...change }));
+    this.events = (normalized.events ?? []).map(event => ({ ...event })).sort((a,b) => a.time-b.time);
     this.sort();
     return normalized;
   }

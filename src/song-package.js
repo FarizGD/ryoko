@@ -25,13 +25,20 @@ export async function readRyokoPackage(file) {
   const audioBlob = await assertPath(zip, manifest.song?.audio, 'Audio').async('blob');
   const coverBlob = manifest.song?.cover && zip.file(manifest.song.cover) ? await zip.file(manifest.song.cover).async('blob') : null;
   const pauseArtBlob = manifest.song?.pauseArt && zip.file(manifest.song.pauseArt) ? await zip.file(manifest.song.pauseArt).async('blob') : null;
+  let modchartSource=null;
+  if (selected.modchart) {
+    const modchartEntry=assertPath(zip,selected.modchart,'Modchart');
+    if (modchartEntry._data?.uncompressedSize>1024*1024) throw new Error('Modchart is larger than 1 MB.');
+    modchartSource=await modchartEntry.async('text');
+    if (modchartSource.length>1024*1024) throw new Error('Modchart is larger than 1 MB.');
+  }
   const urls = {
     audio: URL.createObjectURL(audioBlob),
     cover: coverBlob ? URL.createObjectURL(coverBlob) : null,
     pauseArt: pauseArtBlob ? URL.createObjectURL(pauseArtBlob) : null
   };
   return {
-    manifest, chartData, selectedChart:selected, audioBlob, coverBlob, pauseArtBlob, urls,
+    manifest, chartData, selectedChart:selected, audioBlob, coverBlob, pauseArtBlob, modchartSource, urls,
     revoke() { Object.values(urls).forEach(url => { if (url) URL.revokeObjectURL(url); }); }
   };
 }
@@ -41,22 +48,24 @@ function extensionFor(file, fallback) {
   return extension || fallback;
 }
 
-export async function createRyokoPackage({ chart, audio, cover, pauseArt, title, artist, difficulty='hard' }) {
+export async function createRyokoPackage({ chart, audio, cover, pauseArt, modchartSource, title, artist, difficulty='hard' }) {
   if (!audio) throw new Error('Load an audio file before exporting a package.');
   const zip = new JSZip();
   const audioPath = `audio/song${extensionFor(audio,'.ogg')}`;
   const coverPath = cover ? `art/cover${extensionFor(cover,'.png')}` : null;
   const pausePath = pauseArt ? `art/pause${extensionFor(pauseArt,'.png')}` : null;
   const chartPath = `charts/${difficulty}.json`;
+  const modchartPath=modchartSource?`modcharts/${difficulty}.js`:null;
   const manifest = {
     format:RYOKO_PACKAGE_FORMAT,
     version:RYOKO_PACKAGE_VERSION,
     song:{ title:title||chart.title||'Untitled', artist:artist||chart.artist||'Unknown', bpm:chart.bpm, offset:chart.offset, scrollSpeed:chart.scrollSpeed, audio:audioPath, ...(coverPath?{cover:coverPath}:{}), ...(pausePath?{pauseArt:pausePath}:{}) },
     defaultChart:difficulty,
-    charts:[{ id:difficulty, name:difficulty[0].toUpperCase()+difficulty.slice(1), file:chartPath, format:'ryoko-v1' }]
+    charts:[{ id:difficulty, name:difficulty[0].toUpperCase()+difficulty.slice(1), file:chartPath, format:'ryoko-v1', ...(modchartPath?{modchart:modchartPath}:{}) }]
   };
   zip.file('manifest.json',JSON.stringify(manifest,null,2));
   zip.file(chartPath,chart.toJSON());
+  if (modchartPath) zip.file(modchartPath,modchartSource);
   zip.file(audioPath,typeof audio.arrayBuffer === 'function' ? await audio.arrayBuffer() : audio);
   if (cover) zip.file(coverPath,typeof cover.arrayBuffer === 'function' ? await cover.arrayBuffer() : cover);
   if (pauseArt) zip.file(pausePath,typeof pauseArt.arrayBuffer === 'function' ? await pauseArt.arrayBuffer() : pauseArt);

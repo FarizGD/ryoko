@@ -6,6 +6,8 @@ import Phaser from 'phaser';
 import { GameplayScene } from './scenes/gameplay-scene.js';
 import monochromeFNF from '../charts/monochrome/monochrome-hard.json';
 import { readRyokoPackage, createRyokoPackage } from './song-package.js';
+import { ModchartRuntime } from './modchart.js';
+import monochromeModchart from '../charts/monochrome/modchart.js?raw';
 
 const chart = new Chart();
 chart.load(monochromeFNF);
@@ -33,6 +35,7 @@ let judgments={perfect:0,good:0,bad:0,miss:0};
 let renderingChart=false, chartRecorder=null, recordingChunks=[], renderPreviousBotplay=false;
 let recordingAudioContext=null, recordingAudioSource=null, recordingAudioDestination=null;
 let activePackage = null, currentAudioBlob = null, selectedCover = null, selectedPauseArt = null;
+let activeModchartSource=monochromeModchart;
 let currentSongTitle=chart.title;
 const timing = { perfect: 70, great: 120, good: 180 };
 let launchToken = 0;
@@ -99,6 +102,10 @@ function updateHud() {
 }
 
 const gameplayScene = new GameplayScene(chart, clock, judge, registerMiss, pulseUiBeat, botHit);
+const modchart=new ModchartRuntime(command=>gameplayScene.applyModchartCommand(command),error=>console.error(error));
+gameplayScene.modchart=modchart;
+gameplayScene.modchartState=()=>({time:clock.current,beat:gameplayScene.lastBeat,bpm:chart.bpmAt(clock.current),combo,health,botplay});
+modchart.load(activeModchartSource,gameplayScene.modchartState());
 let phaserGame = null;
 
 function pulseUiBeat(bpm) {
@@ -193,6 +200,8 @@ function hitNote(best,bestAbs) {
   maxCombo = Math.max(maxCombo, combo);
   health = Math.min(100, health + 1.2);
   const q = bestAbs <= timing.perfect ? 'PERFECT' : bestAbs <= timing.great ? 'GOOD' : 'BAD';
+  gameplayScene?.showHit(best,q,false);
+  modchart.hook('onHit',gameplayScene.modchartState(),{direction:best.direction,type:best.type,judgment:q,error:bestAbs,time:best.time});
   judgments[q.toLowerCase()]++;
   score += q === 'PERFECT' ? 1000 : q === 'GOOD' ? 700 : 400;
   setFeedback(q);
@@ -211,13 +220,14 @@ function toggleBotplay() {
   setFeedback(botplay?'BOTPLAY ON':'BOTPLAY OFF');
 }
 
-function registerMiss() {
+function registerMiss(note) {
   if (inputLocked || !$('gamePage') || $('gamePage').classList.contains('hidden')) return;
   combo = 0;
   misses++;
   judgments.miss++;
   health = Math.max(0, health - 5);
   setFeedback('MISS');
+  modchart.hook('onMiss',gameplayScene.modchartState(),note?{direction:note.direction,type:note.type,time:note.time}:null);
   updateHud();
   if (health <= 0) beginFailureSequence();
 }
@@ -321,6 +331,9 @@ async function loadPackage(file) {
     currentAudioBlob = loaded.audioBlob;
     selectedCover = loaded.coverBlob;
     selectedPauseArt = loaded.pauseArtBlob;
+    activeModchartSource=null;
+    if (loaded.modchartSource && window.confirm(`This package contains JavaScript modchart code. Run it?\n\nOnly allow modcharts from authors you trust.`)) activeModchartSource=loaded.modchartSource;
+    modchart.load(activeModchartSource,gameplayScene.modchartState());
     const coverImage = document.querySelector('.song-art img');
     const pauseImage = pauseMenu.querySelector('.pause-art img');
     if (loaded.urls.cover) { coverImage.src = loaded.urls.cover; coverImage.hidden = false; }
@@ -340,7 +353,7 @@ async function exportPackage() {
       if (!response.ok) throw new Error('Could not read the current audio.');
       return response.blob();
     });
-    const blob = await createRyokoPackage({ chart, audio:audioBlob, cover:selectedCover, pauseArt:selectedPauseArt, title:chart.title, artist:chart.artist });
+    const blob = await createRyokoPackage({ chart, audio:audioBlob, cover:selectedCover, pauseArt:selectedPauseArt, modchartSource:activeModchartSource, title:chart.title, artist:chart.artist });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     link.download = `${chart.title.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'') || 'song'}.ryoko`;
@@ -445,6 +458,7 @@ async function launchGame() {
   await Promise.all([unlock, waitForGameplay(), waitForAudio()]);
   if (token !== launchToken) return;
   if (!await runCountdown(token)) return;
+  modchart.hook('onStart',gameplayScene.modchartState());
   await clock.start();
   setGameplayLocked(false);
   $('start').textContent = 'Pause';
@@ -543,12 +557,20 @@ function saveBindings() { localStorage.setItem('ryoko-keybinds',JSON.stringify(i
 keybindSection.querySelector('#resetKeybinds').onclick=() => { input.resetBindings(); saveBindings(); capturingBinding=null; renderKeybinds(); };
 renderKeybinds();
 
-const defaultAppearance={shape:'◆',playerColor:'#ffffff',noteColor:'#8f7cff',trail:true,customImage:null,customImageName:''};
-let playerAppearance={...defaultAppearance};
-try { playerAppearance={...playerAppearance,...JSON.parse(localStorage.getItem('ryoko-appearance'))}; } catch (_) {}
+const defaultNoteColors={left:'#ff68ae',down:'#55c8ff',up:'#55e38e',right:'#ffd45c'};
+const defaultAppearance={shape:'◆',playerColor:'#ffffff',noteColors:{...defaultNoteColors},trail:true,customImage:null,customImageName:''};
+let playerAppearance={...defaultAppearance,noteColors:{...defaultNoteColors}};
+try {
+  const savedAppearance=JSON.parse(localStorage.getItem('ryoko-appearance'));
+  if (savedAppearance) {
+    const legacyColor=savedAppearance.noteColor;
+    playerAppearance={...playerAppearance,...savedAppearance,noteColors:{...defaultNoteColors,...(legacyColor?Object.fromEntries(['left','down','up','right'].map(direction=>[direction,legacyColor])):{}),...(savedAppearance.noteColors||{})}};
+    delete playerAppearance.noteColor;
+  }
+} catch (_) {}
 const appearanceSection=document.createElement('section');
 appearanceSection.className='appearance-settings';
-appearanceSection.innerHTML='<div class="setting-title"><strong>Player appearance</strong><small>Applied immediately</small></div><div class="shape-picker" aria-label="Player shape"></div><div class="custom-player-row"><label class="file-button">Upload PNG or SVG <input id="customPlayerInput" type="file" accept="image/png,image/svg+xml,.png,.svg" hidden></label><span id="customPlayerName">Built-in shape</span><button id="clearCustomPlayer" type="button">Use built-in</button></div><div class="color-settings"><label>Player color <input id="playerColor" type="color"></label><label>Note color <input id="noteColor" type="color"></label></div><label class="toggle-row"><span>Player trail</span><input id="playerTrail" type="checkbox"></label>';
+appearanceSection.innerHTML='<div class="setting-title"><strong>Player appearance</strong><small>Applied immediately</small></div><div class="shape-picker" aria-label="Player shape"></div><div class="custom-player-row"><label class="file-button">Upload PNG or SVG <input id="customPlayerInput" type="file" accept="image/png,image/svg+xml,.png,.svg" hidden></label><span id="customPlayerName">Built-in shape</span><button id="clearCustomPlayer" type="button">Use built-in</button></div><div class="color-settings"><label>Player <input id="playerColor" type="color"></label><label>Left note <input id="leftNoteColor" type="color"></label><label>Down note <input id="downNoteColor" type="color"></label><label>Up note <input id="upNoteColor" type="color"></label><label>Right note <input id="rightNoteColor" type="color"></label></div><label class="toggle-row"><span>Player trail</span><input id="playerTrail" type="checkbox"></label>';
 document.querySelector('.settings-panel').insertBefore(appearanceSection,keybindSection);
 const shapes=['◆','●','■','★','✦'];
 function applyAppearance() {
@@ -564,10 +586,10 @@ for (const shape of shapes) {
   appearanceSection.querySelector('.shape-picker').appendChild(button);
 }
 $('playerColor').value=playerAppearance.playerColor;
-$('noteColor').value=playerAppearance.noteColor;
+for (const direction of ['left','down','up','right']) $(''+direction+'NoteColor').value=playerAppearance.noteColors[direction];
 $('playerTrail').checked=playerAppearance.trail;
 $('playerColor').oninput=event => { playerAppearance.playerColor=event.target.value; applyAppearance(); };
-$('noteColor').oninput=event => { playerAppearance.noteColor=event.target.value; applyAppearance(); };
+for (const direction of ['left','down','up','right']) $(''+direction+'NoteColor').oninput=event => { playerAppearance.noteColors[direction]=event.target.value; applyAppearance(); };
 $('playerTrail').oninput=event => { playerAppearance.trail=event.target.checked; applyAppearance(); };
 $('customPlayerInput').onchange=event => {
   const file=event.target.files[0]; event.target.value='';
@@ -733,8 +755,10 @@ function applySettings() {
 [volume, approach, reducedMotion, ghostTap].forEach(control => control.oninput = applySettings);
 $('resetSettings').onclick = () => {
   volume.value=100; approach.value=1800; ghostTap.checked=true; reducedMotion.checked=false;
-  playerAppearance={...defaultAppearance};
-  $('playerColor').value=playerAppearance.playerColor; $('noteColor').value=playerAppearance.noteColor; $('playerTrail').checked=playerAppearance.trail;
+  playerAppearance={...defaultAppearance,noteColors:{...defaultNoteColors}};
+  $('playerColor').value=playerAppearance.playerColor;
+  for (const direction of ['left','down','up','right']) $(''+direction+'NoteColor').value=playerAppearance.noteColors[direction];
+  $('playerTrail').checked=playerAppearance.trail;
   applyAppearance(); applySettings();
 };
 applySettings();

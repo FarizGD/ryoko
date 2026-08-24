@@ -1,13 +1,38 @@
+export const DEFAULT_BINDINGS = {
+  left:['ArrowLeft','KeyA'],
+  down:['ArrowDown','KeyS'],
+  up:['ArrowUp','KeyW'],
+  right:['ArrowRight','KeyD']
+};
+
 export class InputManager {
-  constructor(){
+  constructor(bindings = DEFAULT_BINDINGS) {
     this.onDirection=()=>{};
-    this.keys={ArrowUp:'up',ArrowRight:'right',ArrowDown:'down',ArrowLeft:'left',w:'up',d:'right',s:'down',a:'left'};
-    window.addEventListener('keydown',e=>{const d=this.keys[e.key];if(d&&!e.repeat){e.preventDefault();this.onDirection(d);}});
+    this.enabled=false;
+    this.bindings=structuredClone(bindings);
+    window.addEventListener('keydown',event => {
+      if (!this.enabled || event.repeat) return;
+      const direction=Object.keys(this.bindings).find(dir => this.bindings[dir].includes(event.code));
+      if (!direction) return;
+      event.preventDefault();
+      this.onDirection(direction);
+    });
     let start=null;
-    const begin=e=>{const p=e.touches?.[0]||e;start={x:p.clientX,y:p.clientY};};
-    const end=e=>{if(!start)return;const p=e.changedTouches?.[0]||e;const dx=p.clientX-start.x,dy=p.clientY-start.y;if(Math.max(Math.abs(dx),Math.abs(dy))<24){start=null;return;}this.onDirection(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'));start=null;};
-    window.addEventListener('touchstart',begin,{passive:true});window.addEventListener('touchend',end,{passive:true});
-    window.addEventListener('mousedown',begin);window.addEventListener('mouseup',end);
-    document.querySelectorAll('.controls button').forEach(b=>{b.addEventListener('pointerdown',e=>{e.preventDefault();this.onDirection(b.dataset.dir);});});
+    const begin=event => { if (!this.enabled) return; const point=event.touches?.[0]||event; start={x:point.clientX,y:point.clientY}; };
+    const end=event => {
+      if (!this.enabled || !start) return;
+      const point=event.changedTouches?.[0]||event,dx=point.clientX-start.x,dy=point.clientY-start.y;
+      if (Math.max(Math.abs(dx),Math.abs(dy))>=24) this.onDirection(Math.abs(dx)>Math.abs(dy)?(dx>0?'right':'left'):(dy>0?'down':'up'));
+      start=null;
+    };
+    window.addEventListener('touchstart',begin,{passive:true}); window.addEventListener('touchend',end,{passive:true});
+    window.addEventListener('mousedown',begin); window.addEventListener('mouseup',end);
+    document.querySelectorAll('.controls button').forEach(button => button.addEventListener('pointerdown',event => {
+      if (!this.enabled) return;
+      event.preventDefault(); this.onDirection(button.dataset.dir);
+    }));
   }
+
+  setBinding(direction,code) { if (this.bindings[direction]) this.bindings[direction]=[code]; }
+  resetBindings() { this.bindings=structuredClone(DEFAULT_BINDINGS); }
 }

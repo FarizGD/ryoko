@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "song": {
+    "title": "Example Pulse",
+    "artist": "Your Name",
+    "bpm": 120,
+    "offset": 0,
+    "scrollSpeed": 1.2
+  },
+  "notes": [
+    { "time": 1000, "type": "tap", "direction": "left" },
+    { "time": 1500, "type": "tap", "direction": "down" },
+    { "time": 2000, "type": "tap", "direction": "up" },
+    { "time": 2500, "type": "tap", "direction": "right" },
+    { "time": 3000, "type": "hold", "direction": "left", "duration": 500 },
+    { "time": 3750, "type": "tap", "direction": "up" },
+    { "time": 4000, "type": "tap", "direction": "down", "auto": true },
+    { "time": 4500, "type": "tap", "direction": "right" }
+  ]
+}

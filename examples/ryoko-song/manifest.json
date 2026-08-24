@@ -1,0 +1,23 @@
+{
+  "format": "ryoko-song-package",
+  "version": 1,
+  "song": {
+    "title": "Example Pulse",
+    "artist": "Your Name",
+    "bpm": 120,
+    "offset": 0,
+    "scrollSpeed": 1.2,
+    "audio": "audio/song.ogg",
+    "cover": "art/cover.svg",
+    "pauseArt": "art/pause.svg"
+  },
+  "defaultChart": "normal",
+  "charts": [
+    {
+      "id": "normal",
+      "name": "Normal",
+      "file": "charts/normal.json",
+      "format": "ryoko-v1"
+    }
+  ]
+}

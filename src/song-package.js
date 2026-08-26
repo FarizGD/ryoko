@@ -10,7 +10,7 @@ function assertPath(zip, path, label) {
   return entry;
 }
 
-export async function readRyokoPackage(file) {
+export async function readRyokoPackage(file,{chartId}={}) {
   if (!file || file.size > 300 * 1024 * 1024) throw new Error('Package is missing or larger than 300 MB.');
   const zip = await JSZip.loadAsync(typeof file.arrayBuffer === 'function' ? await file.arrayBuffer() : file);
   const manifestEntry = zip.file('manifest.json');
@@ -20,14 +20,19 @@ export async function readRyokoPackage(file) {
   if (manifest.version !== RYOKO_PACKAGE_VERSION) throw new Error(`Unsupported package version: ${manifest.version}.`);
   if (!Array.isArray(manifest.charts) || !manifest.charts.length) throw new Error('The package contains no charts.');
 
-  const selected = manifest.charts.find(chart => chart.id === manifest.defaultChart) || manifest.charts[0];
+  const selected = (chartId&&manifest.charts.find(chart=>chart.id===chartId)) || manifest.charts.find(chart => chart.id === manifest.defaultChart) || manifest.charts[0];
   const chartData = JSON.parse(await assertPath(zip, selected.file, 'Chart').async('text'));
   const audioBlob = await assertPath(zip, manifest.song?.audio, 'Audio').async('blob');
   const coverBlob = manifest.song?.cover && zip.file(manifest.song.cover) ? await zip.file(manifest.song.cover).async('blob') : null;
   const pauseArtBlob = manifest.song?.pauseArt && zip.file(manifest.song.pauseArt) ? await zip.file(manifest.song.pauseArt).async('blob') : null;
   let modchartSource=null;
-  if (selected.modchart) {
-    const modchartEntry=assertPath(zip,selected.modchart,'Modchart');
+  let modchartPath;
+  if (Object.hasOwn(selected,'modchart')) modchartPath=selected.modchart;
+  else if (Object.hasOwn(manifest,'modchart')) modchartPath=manifest.modchart;
+  else if (Object.hasOwn(manifest.song||{},'modchart')) modchartPath=manifest.song.modchart;
+  else if (zip.file('modchart.js')) modchartPath='modchart.js';
+  if (modchartPath) {
+    const modchartEntry=assertPath(zip,modchartPath,'Modchart');
     if (modchartEntry._data?.uncompressedSize>1024*1024) throw new Error('Modchart is larger than 1 MB.');
     modchartSource=await modchartEntry.async('text');
     if (modchartSource.length>1024*1024) throw new Error('Modchart is larger than 1 MB.');
@@ -38,7 +43,7 @@ export async function readRyokoPackage(file) {
     pauseArt: pauseArtBlob ? URL.createObjectURL(pauseArtBlob) : null
   };
   return {
-    manifest, chartData, selectedChart:selected, audioBlob, coverBlob, pauseArtBlob, modchartSource, urls,
+    manifest, chartData, selectedChart:selected, audioBlob, coverBlob, pauseArtBlob, modchartSource, modchartPath:modchartPath||null, urls,
     revoke() { Object.values(urls).forEach(url => { if (url) URL.revokeObjectURL(url); }); }
   };
 }

@@ -17,7 +17,8 @@
       "id": "normal",
       "name": "Normal",
       "file": "charts/normal.json",
-      "format": "ryoko-v1"
+      "format": "ryoko-v1",
+      "modchart": "modchart.js"
     }
   ]
 }

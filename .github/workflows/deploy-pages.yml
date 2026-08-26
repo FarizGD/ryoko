@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          lfs: true
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -36,6 +38,12 @@ jobs:
 
       - name: Build site
         run: npm run build
+
+      - name: Verify packaged charts and audio
+        shell: bash
+        run: |
+          echo "Files included in the Pages chart catalog:"
+          find dist/charts -type f -print
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

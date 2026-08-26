@@ -2,7 +2,7 @@
 
 RYŌKO modcharts are optional JavaScript files that react to the audio-derived gameplay clock. They run in a Web Worker and send validated visual commands to Phaser. A modchart cannot directly manipulate the DOM or Phaser scene.
 
-Package modcharts are executable code. RYŌKO asks the player for confirmation before loading one. Only enable modcharts from authors you trust.
+Package modcharts are executable code. Packages discovered from the project's own `./charts` directory are treated as trusted and run automatically. Manually uploaded packages require confirmation. Only add or enable modcharts from authors you trust.
 
 ## Package setup
 
@@ -20,6 +20,8 @@ Add a path to the selected chart entry in `manifest.json`:
 ```
 
 The path must be relative to the archive root. Modcharts are limited to 1 MB.
+
+If the manifest does not specify a path, RYŌKO automatically loads `modchart.js` from the archive root when present. Set `"modchart": false` on the selected chart to disable that fallback. The path can also be set at the manifest root or under `song`; a selected chart's value has highest priority.
 
 ## Hooks
 

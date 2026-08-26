@@ -4,13 +4,11 @@ import { Chart } from './chart.js';
 import { ChartEditor } from './editor.js';
 import Phaser from 'phaser';
 import { GameplayScene } from './scenes/gameplay-scene.js';
-import monochromeFNF from '../charts/monochrome/monochrome-hard.json';
 import { readRyokoPackage, createRyokoPackage } from './song-package.js';
 import { ModchartRuntime } from './modchart.js';
-import monochromeModchart from '../charts/monochrome/modchart.js?raw';
 
 const chart = new Chart();
-chart.load(monochromeFNF);
+chart.load({version:1,song:{title:'Select a Song',artist:'Unknown',bpm:120,offset:0,scrollSpeed:1},notes:[]});
 
 const clock = new RhythmClock(chart.bpm);
 const input = new InputManager();
@@ -35,7 +33,7 @@ let judgments={perfect:0,good:0,bad:0,miss:0};
 let renderingChart=false, chartRecorder=null, recordingChunks=[], renderPreviousBotplay=false;
 let recordingAudioContext=null, recordingAudioSource=null, recordingAudioDestination=null;
 let activePackage = null, currentAudioBlob = null, selectedCover = null, selectedPauseArt = null;
-let activeModchartSource=monochromeModchart;
+let activeModchartSource=null;
 let currentSongTitle=chart.title;
 const timing = { perfect: 70, great: 120, good: 180 };
 let launchToken = 0;
@@ -60,14 +58,12 @@ pauseMenu.innerHTML = '<div class="pause-card"><div class="pause-art"><img src="
 pauseMenu.querySelector('img').onerror = event => { event.currentTarget.hidden = true; };
 $('gamePage').appendChild(pauseMenu);
 
-audio.src = new URL('charts/monochrome/audio.ogg',document.baseURI).href;
-audio.load();
 clock.attachAudio(audio);
 $('selectedSongTitle').textContent = chart.title;
 $('selectedSongMeta').textContent = `${chart.bpm} BPM · ${chart.notes.filter(note => !note.auto).length} player notes · ${chart.scrollSpeed}× speed`;
 $('gameSongTitle').textContent = chart.title;
 $('editorSongTitle').textContent = chart.title;
-$('songStatus').textContent = 'Bundled example: Monochrome';
+$('songStatus').textContent = 'Scanning ./charts for .ryoko packages…';
 $('bpm').value = chart.bpm;
 
 function formatTime(ms) {
@@ -316,10 +312,10 @@ function updateSongLabels() {
   $('bpm').value = chart.bpm;
 }
 
-async function loadPackage(file) {
+async function loadPackage(file,displayName=file?.name||'package.ryoko',{trustedModchart=false,chartId}={}) {
   if (!file) return;
   try {
-    const loaded = await readRyokoPackage(file);
+    const loaded = await readRyokoPackage(file,{chartId});
     activePackage?.revoke();
     activePackage = loaded;
     chart.load(loaded.chartData);
@@ -332,7 +328,7 @@ async function loadPackage(file) {
     selectedCover = loaded.coverBlob;
     selectedPauseArt = loaded.pauseArtBlob;
     activeModchartSource=null;
-    if (loaded.modchartSource && window.confirm(`This package contains JavaScript modchart code. Run it?\n\nOnly allow modcharts from authors you trust.`)) activeModchartSource=loaded.modchartSource;
+    if (loaded.modchartSource && (trustedModchart||window.confirm(`This package contains JavaScript modchart code. Run it?\n\nOnly allow modcharts from authors you trust.`))) activeModchartSource=loaded.modchartSource;
     modchart.load(activeModchartSource,gameplayScene.modchartState());
     const coverImage = document.querySelector('.song-art img');
     const pauseImage = pauseMenu.querySelector('.pause-art img');
@@ -341,10 +337,72 @@ async function loadPackage(file) {
     updateSongLabels();
     reset();
     editor.render();
-    $('songStatus').textContent = `Package loaded: ${file.name}`;
+    $('songStatus').textContent = `Package loaded: ${displayName}`;
+    return true;
   } catch (error) {
     window.alert(`Could not load package: ${error.message}`);
+    return false;
   }
+}
+
+async function scanChartPackages() {
+  const browser=document.querySelector('.song-browser');
+  const localSong=browser?.querySelector('.local-song');
+  if (!browser||!localSong) return;
+  try {
+    const catalogUrl=new URL('charts/catalog.json',document.baseURI);
+    const response=await fetch(catalogUrl,{cache:'no-store'});
+    if (!response.ok) return;
+    const catalog=await response.json();
+    let discovered=0;
+    for (const entry of catalog.packages||[]) {
+      if (!entry.path||entry.size>300*1024*1024) continue;
+      const card=document.createElement('article');
+      card.className='song-card package-song ui-spawn';
+      const art=document.createElement('div');
+      art.className='song-art'; art.textContent='凌';
+      const details=document.createElement('div');
+      const title=document.createElement('strong'); title.textContent=entry.title||entry.path;
+      const meta=document.createElement('p');
+      const difficulties=entry.difficulties?.length?entry.difficulties:[{id:entry.defaultChart||'default',name:entry.difficulty||'Default',modchart:entry.modchart}];
+      const difficultySelect=document.createElement('select');
+      difficultySelect.className='difficulty-select';
+      difficultySelect.setAttribute('aria-label',`Difficulty for ${entry.title||entry.path}`);
+      for (const difficulty of difficulties) {
+        const option=document.createElement('option');
+        option.value=difficulty.id; option.textContent=difficulty.name;
+        option.selected=difficulty.id===entry.defaultChart;
+        difficultySelect.appendChild(option);
+      }
+      const updateMeta=() => {
+        const difficulty=difficulties.find(item=>item.id===difficultySelect.value)||difficulties[0];
+        meta.textContent=`${entry.artist||'Unknown'} · ${entry.bpm||120} BPM · ${difficulty.name}${difficulty.modchart?' · MODCHART':''}`;
+      };
+      difficultySelect.onchange=updateMeta;
+      updateMeta();
+      details.append(title,meta);
+      const button=document.createElement('button');
+      button.className='primary'; button.textContent='Play';
+      button.onclick=async () => {
+        button.disabled=true; button.textContent='Loading…';
+        $('songStatus').textContent=`Loading: ${entry.title||entry.path}`;
+        try {
+          const packageUrl=new URL(entry.path,catalogUrl);
+          const packageResponse=await fetch(packageUrl);
+          if (!packageResponse.ok) throw new Error(`HTTP ${packageResponse.status}`);
+          const blob=await packageResponse.blob();
+          if (await loadPackage(blob,entry.path,{trustedModchart:true,chartId:difficultySelect.value})) await launchGame();
+        } catch (error) { window.alert(`Could not load ${entry.path}: ${error.message}`); }
+        finally { button.disabled=false; button.textContent='Play'; }
+      };
+      const actions=document.createElement('div');
+      actions.className='song-actions'; actions.append(difficultySelect,button);
+      card.append(art,details,actions);
+      browser.insertBefore(card,localSong);
+      discovered++;
+    }
+    $('songStatus').textContent=discovered?`${discovered} package${discovered===1?'':'s'} found in ./charts`:'No .ryoko packages found in ./charts';
+  } catch (error) { console.warn('Could not scan ./charts packages.',error); }
 }
 
 async function exportPackage() {
@@ -514,6 +572,7 @@ function showResults(failed = false) {
 $('songInput').onchange = e => loadSong(e.target.files[0]);
 $('editorSongInput').onchange = e => loadSong(e.target.files[0]);
 $('packageInput').onchange = e => { loadPackage(e.target.files[0]); e.target.value=''; };
+scanChartPackages();
 document.addEventListener('ryoko:chart-loaded',event => { currentSongTitle=event.detail?.title||chart.title; updateSongLabels(); });
 $('coverInput').onchange = e => {
   selectedCover = e.target.files[0] || null;
@@ -609,10 +668,28 @@ const pages = { title:'titlePage', songs:'songsPage', game:'gamePage', editor:'e
 const titles = { title:'TITLE', songs:'SONG SELECT', game:'GAMEPLAY', editor:'CHART EDITOR', settings:'SETTINGS', credits:'CREDITS', results:'RESULTS' };
 const backTargets = { songs:'title', editor:'title', settings:'title', credits:'title', results:'songs' };
 let currentPage='title';
+const pageAnimations=new WeakMap();
+function animatePage(page) {
+  if (document.body.classList.contains('reduced-motion')||typeof page.animate!=='function') return;
+  for (const animation of pageAnimations.get(page)||[]) animation.cancel();
+  const animations=[];
+  animations.push(page.animate([
+    {opacity:0,filter:'blur(4px)'},
+    {opacity:1,filter:'blur(0)'}
+  ],{duration:260,easing:'cubic-bezier(.16,.84,.32,1)'}));
+  const items=page.querySelectorAll('.page-head,.hero>* ,.song-card:not(.hidden),.local-song,.settings-panel>* ,.credits-panel>* ,.editor-head,.section-nav,.fnf-timeline,.editor-actions>* ,.results-card>*:not(.result-grade)');
+  items.forEach((element,index)=>animations.push(element.animate([
+    {opacity:0,transform:'translateY(18px) scale(.985)'},
+    {opacity:1,transform:'none'}
+  ],{duration:360,delay:Math.min(index,10)*32,easing:'cubic-bezier(.16,.84,.32,1)',fill:'backwards'})));
+  pageAnimations.set(page,animations);
+}
 function showPage(name) {
   if (!pages[name]) return;
   document.querySelectorAll('.page').forEach(page => page.classList.add('hidden'));
-  $(pages[name]).classList.remove('hidden');
+  const incoming=$(pages[name]);
+  incoming.classList.remove('hidden');
+  animatePage(incoming);
   currentPage=name;
   $('pageTitle').textContent = titles[name];
   if (name !== 'game') { launchToken++; loadingScreen.classList.add('hidden'); }
@@ -631,6 +708,12 @@ function showPage(name) {
 }
 
 document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => showPage(button.dataset.page));
+document.addEventListener('pointerdown',event=>{
+  const control=event.target.closest('button,.file-button,.song-card');
+  if (!control||document.body.classList.contains('reduced-motion')) return;
+  control.classList.remove('ui-press'); void control.offsetWidth; control.classList.add('ui-press');
+  setTimeout(()=>control.classList.remove('ui-press'),280);
+},{passive:true});
 $('playSelected').onclick = launchGame;
 $('testChart').onclick = launchGame;
 

@@ -20,7 +20,17 @@ Open the local URL printed by Vite. Create a production build with `npm run buil
 - Touch or mouse swipe
 - Space to play or pause
 
-The chart editor supports local audio, JSON import/export, timeline seeking, beat snapping, zoom, double-click placement, and note dragging.
+The chart editor supports local audio, JSON import/export, timeline seeking, beat snapping, zoom, FNF-style eight-lane placement, and note dragging.
+
+## osu!mania conversion
+
+Convert every mania difficulty in an `.osz` into one multi-chart package:
+
+```bash
+python scripts/convert_osz_mania.py song.osz charts/song.ryoko
+```
+
+Use `--modchart custom.js` to embed an existing RYŌKO modchart, or `--generate-modchart` to generate basic beat zoom and osu! break effects. Full osu storyboard animation conversion is not supported.
 
 ## Architecture
 

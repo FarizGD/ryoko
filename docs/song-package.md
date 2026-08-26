@@ -39,7 +39,8 @@ Only `manifest.json`, one chart, and one audio file are required. Cover and paus
       "id": "normal",
       "name": "Normal",
       "file": "charts/normal.json",
-      "format": "ryoko-v1"
+      "format": "ryoko-v1",
+      "audio": "audio/normal.ogg"
     },
     {
       "id": "hard",
@@ -52,7 +53,7 @@ Only `manifest.json`, one chart, and one audio file are required. Cover and paus
 }
 ```
 
-`charts` may contain multiple difficulties. Automatically discovered packages show every entry as a difficulty option in Song Selection. `defaultChart` controls the initially selected difficulty; when it is missing, the first chart is selected. Each difficulty can use its own chart format and modchart. Chart files may use native RYŌKO JSON or a supported FNF JSON shape; format detection is automatic on import.
+`charts` may contain multiple difficulties. Automatically discovered packages show every entry as a difficulty option in Song Selection. `defaultChart` controls the initially selected difficulty; when it is missing, the first chart is selected. Each difficulty can use its own chart format, modchart, and optional `audio` override. Without an override, `song.audio` is used. Chart files may use native RYŌKO JSON or a supported FNF JSON shape; format detection is automatic on import.
 
 Package files are opened entirely in the browser. Their audio and artwork are exposed through temporary object URLs and are not uploaded.
 

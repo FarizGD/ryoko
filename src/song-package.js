@@ -22,7 +22,8 @@ export async function readRyokoPackage(file,{chartId}={}) {
 
   const selected = (chartId&&manifest.charts.find(chart=>chart.id===chartId)) || manifest.charts.find(chart => chart.id === manifest.defaultChart) || manifest.charts[0];
   const chartData = JSON.parse(await assertPath(zip, selected.file, 'Chart').async('text'));
-  const audioBlob = await assertPath(zip, manifest.song?.audio, 'Audio').async('blob');
+  const audioPath=selected.audio||manifest.song?.audio;
+  const audioBlob = await assertPath(zip, audioPath, 'Audio').async('blob');
   const coverBlob = manifest.song?.cover && zip.file(manifest.song.cover) ? await zip.file(manifest.song.cover).async('blob') : null;
   const pauseArtBlob = manifest.song?.pauseArt && zip.file(manifest.song.pauseArt) ? await zip.file(manifest.song.pauseArt).async('blob') : null;
   let modchartSource=null;
@@ -43,7 +44,7 @@ export async function readRyokoPackage(file,{chartId}={}) {
     pauseArt: pauseArtBlob ? URL.createObjectURL(pauseArtBlob) : null
   };
   return {
-    manifest, chartData, selectedChart:selected, audioBlob, coverBlob, pauseArtBlob, modchartSource, modchartPath:modchartPath||null, urls,
+    manifest, chartData, selectedChart:selected, audioPath, audioBlob, coverBlob, pauseArtBlob, modchartSource, modchartPath:modchartPath||null, urls,
     revoke() { Object.values(urls).forEach(url => { if (url) URL.revokeObjectURL(url); }); }
   };
 }

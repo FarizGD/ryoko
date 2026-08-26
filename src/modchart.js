@@ -87,6 +87,19 @@ export class ModchartRuntime {
   }
 
   hook(name,state={},detail) { if (this.worker&&this.ready) this.worker.postMessage({kind:'hook',name,state,detail}); }
+  waitUntilReady(timeout=2000) {
+    if (this.ready) return Promise.resolve(true);
+    if (!this.worker) return Promise.resolve(false);
+    const started=performance.now();
+    return new Promise(resolve => {
+      const check=() => {
+        if (this.ready) resolve(true);
+        else if (!this.worker || performance.now()-started>=timeout) resolve(false);
+        else setTimeout(check,16);
+      };
+      check();
+    });
+  }
   update(state) {
     if (state.time-this.lastUpdate<33) return;
     this.lastUpdate=state.time;

@@ -4,54 +4,6 @@ const VECTORS = { up:[0,-1], right:[1,0], down:[0,1], left:[-1,0] };
 const ARROWS = { up:'↑', right:'→', down:'↓', left:'←' };
 const COLORS = { up:'#55e38e', right:'#ffd45c', down:'#55c8ff', left:'#ff68ae' };
 
-const RHYTHM_FRAGMENT_SHADER = `
-#define SHADER_NAME RYOKO_RHYTHM_FX
-precision mediump float;
-uniform sampler2D uMainSampler;
-uniform float uTime;
-uniform float uBeat;
-uniform vec2 uResolution;
-varying vec2 outTexCoord;
-
-void main() {
-  vec2 uv = outTexCoord;
-  vec2 center = uv - 0.5;
-  float radius = dot(center, center);
-  uv += center * radius * (0.018 + uBeat * 0.018);
-  float split = 0.0012 + uBeat * 0.0035;
-  vec2 chroma = vec2(split * (0.6 + radius), 0.0);
-  float red = texture2D(uMainSampler, uv + chroma).r;
-  float green = texture2D(uMainSampler, uv).g;
-  float blue = texture2D(uMainSampler, uv - chroma).b;
-  float alpha = texture2D(uMainSampler, uv).a;
-  vec3 color = vec3(red, green, blue);
-  float scanline = sin(uv.y * uResolution.y * 1.15 + uTime * 22.0) * 0.022;
-  float vignette = smoothstep(0.82, 0.22, length(center));
-  float ring = exp(-abs(length(center) - (0.12 + uBeat * 0.025)) * 32.0) * uBeat;
-  color = color * (0.96 + scanline) * mix(0.68, 1.0, vignette);
-  color += vec3(0.30, 0.20, 0.65) * ring * 0.22;
-  gl_FragColor = vec4(color, alpha);
-}`;
-
-class RhythmPostFX extends Phaser.Renderer.WebGL.Pipelines.PostFXPipeline {
-  constructor(game) {
-    super({ game, name:'RhythmPostFX', renderTarget:true, fragShader:RHYTHM_FRAGMENT_SHADER });
-    this.elapsed=0;
-    this.beat=0;
-  }
-
-  pulse() { this.beat=1; }
-
-  onPreRender() {
-    const delta=this.game.loop.delta/1000;
-    this.elapsed+=delta;
-    this.beat=Math.max(0,this.beat-delta*3.8);
-    this.set1f('uTime',this.elapsed);
-    this.set1f('uBeat',this.beat);
-    this.set2f('uResolution',this.renderer.width,this.renderer.height);
-  }
-}
-
 export class GameplayScene extends Phaser.Scene {
   constructor(chart, clock, onDirection, onMiss, onBeat, onBotHit) {
     super('gameplay');
@@ -78,16 +30,14 @@ export class GameplayScene extends Phaser.Scene {
     this.scrollTransition=null;
     this.lastBurstAt=new Map();
     this.modchart=null;
+    this.postFx=null;
+    this.shaderBeat=0;
     this.modchartState=()=>({time:this.clock.current,bpm:this.chart.bpmAt(this.clock.current),beat:this.lastBeat});
   }
 
   create() {
     this.cameras.main.setBackgroundColor('#0d0c18');
-    // Phaser post-FX render targets can become incomplete when a responsive
-    // canvas is resized, producing an opaque black frame on affected GPUs.
-    // Keep the scene on the normal WebGL pipeline; gameplay effects below do
-    // not require an offscreen framebuffer.
-    this.postFx=null;
+    this.ambientBackground=this.add.graphics().setDepth(-100).setScrollFactor(0);
     this.guide = this.add.graphics();
     this.receptors = new Map();
     for (const direction of Object.keys(VECTORS)) {
@@ -104,12 +54,29 @@ export class GameplayScene extends Phaser.Scene {
       wordWrap:{width:Math.max(220,this.scale.width-80)}
     }).setOrigin(.5,0).setAlpha(0).setDepth(90).setScrollFactor(0);
     if (this.appearance.customImage) this.loadCustomPlayer(this.appearance.customImage);
+    // Phaser resizes an existing post pipeline with the renderer. Replacing a
+    // live camera pipeline here can leave its framebuffer black on replay.
     this.scale.on('resize', () => this.layout());
     this.layout();
+    this.postFx={pulse:()=>{ this.shaderBeat=1; }};
+  }
+
+  drawBackground() {
+    if (!this.ambientBackground || !this.scale) return;
+    const {width,height}=this.scale,cx=width/2,cy=height/2;
+    const pulse=this.shaderBeat;
+    this.ambientBackground.clear().fillStyle(0x090817,1).fillRect(0,0,width,height);
+    for (let i=5;i>=1;i--) {
+      const radius=Math.min(width,height)*(.12+i*.09+pulse*.012);
+      this.ambientBackground.fillStyle(i%2?0x39246f:0x241b55,.035+i*.012+pulse*.018).fillCircle(cx,cy,radius);
+    }
+    this.ambientBackground.lineStyle(2,0x9b7cff,.08+pulse*.24).strokeCircle(cx,cy,Math.min(width,height)*(.22+pulse*.025));
   }
 
   layout() {
+    if (!this.scale) return;
     const { width, height } = this.scale;
+    this.drawBackground();
     this.player?.setPosition(width/2, height/2);
     const cx=width/2,cy=height/2,targetDistance=Math.min(78,width*.14,height*.14);
     this.guide?.clear().lineStyle(2,0x8f7cff,.16)
@@ -324,6 +291,8 @@ export class GameplayScene extends Phaser.Scene {
 
   update() {
     const now=this.clock.current, cx=this.scale.width/2, cy=this.scale.height/2;
+    this.shaderBeat=Math.max(0,this.shaderBeat-this.game.loop.delta/260);
+    if (this.shaderBeat>0) this.drawBackground();
     this.modchart?.update(this.modchartState());
     this.processEvents(now);
     const zoomDecay=1-Math.exp(-this.game.loop.delta/90);
@@ -405,6 +374,9 @@ export class GameplayScene extends Phaser.Scene {
   }
 
   resetNotes() {
+    // A run reuses this scene. Clear every visual mutation that chart events,
+    // modcharts, hit effects, or camera movement may have left behind.
+    this.tweens?.killAll();
     for (const view of this.noteViews.values()) view.destroy();
     this.noteViews.clear();
     this.lastBeat=-1;
@@ -416,7 +388,19 @@ export class GameplayScene extends Phaser.Scene {
     this.scrollTransition=null;
     this.lastBurstAt.clear();
     this.modchart?.reset(this.modchartState());
-    if (this.eventText) { this.tweens.killTweensOf(this.eventText); this.eventText.setAlpha(0).setText(''); }
-    this.cameras?.main?.setZoom(1);
+    // Packages can be selected before Phaser creates this scene. The chart
+    // state above still needs resetting, but visual objects do not exist yet.
+    if (!this.scale || !this.cameras?.main) return;
+    if (this.eventText) this.eventText.setAlpha(0).setScale(1).setText('').setVisible(true);
+    if (this.player) this.player.setAlpha(1).setScale(1).setRotation(0).setVisible(true);
+    for (const receptor of this.receptors?.values() || []) receptor.setAlpha(.9).setScale(1).setRotation(0).setVisible(true);
+    this.guide?.setAlpha(1).setScale(1).setRotation(0).setVisible(true);
+    const camera=this.cameras?.main;
+    if (camera) {
+      camera.resetFX();
+      camera.setScroll(0,0).setRotation(0).setZoom(1).setAlpha(1).setVisible(true);
+      camera.setBackgroundColor('#0d0c18');
+    }
+    this.layout();
   }
 }

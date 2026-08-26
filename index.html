@@ -4,10 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <meta name="theme-color" content="#080812">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23080812'/%3E%3Cpath d='M16 18h12l8 12 8-12h8L40 36v12H28V36z' fill='%238f7cff'/%3E%3C/svg%3E">
   <title>RYŌKO — Rhythm Prototype</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="title-splash-active">
   <main id="app">
     <header class="topbar">
       <button class="brand" data-page="title">RYŌKO</button>
@@ -15,7 +16,18 @@
       <button class="nav-home" data-page="title">Home</button>
     </header>
 
-    <section id="titlePage" class="page title-page">
+    <section id="splashPage" class="page splash-page" aria-label="RYŌKO title screen">
+      <button id="enterGame" class="splash-enter" type="button" aria-label="Enter RYŌKO">
+        <span class="splash-rings" aria-hidden="true"></span>
+        <span class="splash-kicker">SURPASS THE BEAT</span>
+        <strong>RYŌKO</strong>
+        <small>凌鼓</small>
+        <span class="splash-prompt">PRESS ANY KEY · TAP TO START</span>
+        <span class="splash-credit">by FarizDev</span>
+      </button>
+    </section>
+
+    <section id="titlePage" class="page title-page hidden">
       <div class="hero">
         <p class="eyebrow">SURPASS THE BEAT</p>
         <h1>RYŌKO <small>凌鼓</small></h1>
@@ -40,7 +52,7 @@
     <section id="gamePage" class="page hidden">
       <div class="page-head compact"><button data-page="songs">Quit</button><div class="now-playing"><small>NOW PLAYING</small><strong id="gameSongTitle">Prototype Beat</strong></div><button id="restart">Restart</button></div>
       <div class="hud"><div><span id="combo">0</span><small> COMBO</small></div><div id="score">000000</div><div class="health-wrap"><small>HEALTH</small><div class="health-track"><div id="healthFill" class="health-fill"></div></div></div></div>
-      <div class="judgment-counters"><span><b id="perfectCount">0</b> PERFECT</span><span><b id="goodCount">0</b> GOOD</span><span><b id="badCount">0</b> BAD</span><span><b id="missCount">0</b> MISS</span><span id="renderStatus" class="render-status hidden">● RENDERING 854×480</span></div>
+      <div class="judgment-counters"><span><b id="perfectCount">0</b> PERFECT</span><span><b id="goodCount">0</b> GOOD</span><span><b id="badCount">0</b> BAD</span><span><b id="missCount">0</b> MISS</span><span id="renderStatus" class="render-status hidden">● RENDERING 480P · 60 FPS</span></div>
       <div id="arena" class="arena"><div id="feedback">READY</div></div>
       <div class="controls"><button data-dir="left">←</button><button data-dir="down">↓</button><button data-dir="up">↑</button><button data-dir="right">→</button></div>
       <div class="transport"><button id="start" class="primary">Start</button><span id="time">0:00.000</span></div>

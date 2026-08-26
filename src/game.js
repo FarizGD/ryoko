@@ -16,7 +16,7 @@ try {
   const savedBindings=JSON.parse(localStorage.getItem('ryoko-keybinds'));
   if (savedBindings && ['left','down','up','right'].every(direction => Array.isArray(savedBindings[direction]))) {
     for (const direction of ['left','down','up','right']) {
-      const allowed=savedBindings[direction].filter(code => code!=='KeyL'&&code!=='Backquote');
+      const allowed=savedBindings[direction].filter(code => code!=='KeyL'&&code!=='KeyP'&&code!=='Backquote');
       if (allowed.length) input.bindings[direction]=allowed;
     }
   }
@@ -28,7 +28,7 @@ audio.preload = 'metadata';
 const $ = id => document.getElementById(id);
 const comboEl = $('combo'), scoreEl = $('score'), healthFill = $('healthFill'), feedbackEl = $('feedback'), timeEl = $('time');
 let score = 0, combo = 0, maxCombo = 0, misses = 0, hits = 0, health = 100, lastJudged = -1, songUrl = null;
-let inputLocked = false, endingRun = false, botplay = false;
+let inputLocked = false, endingRun = false, botplay = false, practiceMode=false, practiceRun=false;
 let judgments={perfect:0,good:0,bad:0,miss:0};
 let renderingChart=false, chartRecorder=null, recordingChunks=[], renderPreviousBotplay=false;
 let recordingAudioContext=null, recordingAudioSource=null, recordingAudioDestination=null;
@@ -52,9 +52,13 @@ const botplayIndicator=document.createElement('div');
 botplayIndicator.className='botplay-indicator hidden';
 botplayIndicator.textContent='BOTPLAY';
 $('arena').appendChild(botplayIndicator);
+const practiceIndicator=document.createElement('div');
+practiceIndicator.className='practice-indicator hidden';
+practiceIndicator.textContent='PRACTICE · SCORE DISABLED';
+$('arena').appendChild(practiceIndicator);
 const pauseMenu = document.createElement('div');
 pauseMenu.className = 'pause-menu hidden';
-pauseMenu.innerHTML = '<div class="pause-card"><div class="pause-art"><img src="charts/monochrome/pause-art.png" alt="Pause character art"></div><div class="pause-content"><p class="eyebrow">GAME PAUSED</p><h2>Take a breath.</h2><button id="resumeGame" class="primary">Resume</button><button id="restartPaused">Restart</button><button id="quitPaused">Quit to Songs</button></div></div>';
+pauseMenu.innerHTML = '<div class="pause-card"><div class="pause-art"><img alt="Pause character art" hidden></div><div class="pause-content"><p class="eyebrow">GAME PAUSED</p><h2>Take a breath.</h2><button id="resumeGame" class="primary">Resume</button><button id="restartPaused">Restart</button><button id="quitPaused">Quit to Songs</button></div></div>';
 pauseMenu.querySelector('img').onerror = event => { event.currentTarget.hidden = true; };
 $('gamePage').appendChild(pauseMenu);
 
@@ -135,7 +139,9 @@ function ensureGameplay() {
   }
   const arena = $('arena');
   phaserGame = new Phaser.Game({
-    type: Phaser.AUTO,
+    // Canvas rendering avoids WebGL framebuffer allocation failures seen when
+    // the responsive game area is hidden and shown between runs.
+    type: Phaser.CANVAS,
     parent: arena,
     backgroundColor: '#0d0c18',
     width: Math.max(1, arena.clientWidth),
@@ -199,7 +205,7 @@ function hitNote(best,bestAbs) {
   gameplayScene?.showHit(best,q,false);
   modchart.hook('onHit',gameplayScene.modchartState(),{direction:best.direction,type:best.type,judgment:q,error:bestAbs,time:best.time});
   judgments[q.toLowerCase()]++;
-  score += q === 'PERFECT' ? 1000 : q === 'GOOD' ? 700 : 400;
+  if (!practiceRun) score += q === 'PERFECT' ? 1000 : q === 'GOOD' ? 700 : 400;
   setFeedback(q);
   scheduleHudUpdate();
 }
@@ -216,12 +222,34 @@ function toggleBotplay() {
   setFeedback(botplay?'BOTPLAY ON':'BOTPLAY OFF');
 }
 
+function refreshGameplaySurface() {
+  if (!phaserGame || $('gamePage').classList.contains('hidden')) return;
+  const canvas=phaserGame.canvas;
+  if (canvas) {
+    canvas.style.display='block';
+    canvas.style.visibility='visible';
+    canvas.style.opacity='1';
+  }
+  resizeGameplay();
+  gameplayScene.resetNotes();
+  // The page entrance animation can change its measured size for one frame.
+  requestAnimationFrame(resizeGameplay);
+}
+
+function togglePractice() {
+  practiceMode=!practiceMode;
+  if (practiceMode) { practiceRun=true; score=0; health=100; }
+  practiceIndicator.classList.toggle('hidden',!practiceMode);
+  setFeedback(practiceMode?'PRACTICE ON':'PRACTICE OFF');
+  updateHud();
+}
+
 function registerMiss(note) {
   if (inputLocked || !$('gamePage') || $('gamePage').classList.contains('hidden')) return;
   combo = 0;
   misses++;
   judgments.miss++;
-  health = Math.max(0, health - 5);
+  if (!practiceMode) health = Math.max(0, health - 5);
   setFeedback('MISS');
   modchart.hook('onMiss',gameplayScene.modchartState(),note?{direction:note.direction,type:note.type,time:note.time}:null);
   updateHud();
@@ -274,6 +302,7 @@ function reset() {
   chart.notes.forEach(n => { delete n._hit; delete n._expired; });
   score = 0; combo = 0; maxCombo = 0; misses = 0; hits = 0; health = 100; lastJudged = -1;
   judgments={perfect:0,good:0,bad:0,miss:0};
+  practiceRun=practiceMode;
   endingRun = false;
   setGameplayLocked(false);
   audio.playbackRate = 1;
@@ -334,6 +363,7 @@ async function loadPackage(file,displayName=file?.name||'package.ryoko',{trusted
     const pauseImage = pauseMenu.querySelector('.pause-art img');
     if (loaded.urls.cover) { coverImage.src = loaded.urls.cover; coverImage.hidden = false; }
     if (loaded.urls.pauseArt) { pauseImage.src = loaded.urls.pauseArt; pauseImage.hidden = false; }
+    else { pauseImage.removeAttribute('src'); pauseImage.hidden = true; }
     updateSongLabels();
     reset();
     editor.render();
@@ -426,9 +456,9 @@ function createRecorder(stream) {
   const formats=['video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'];
   for (const mimeType of formats) {
     if (!MediaRecorder.isTypeSupported(mimeType)) continue;
-    try { return new MediaRecorder(stream,{mimeType,videoBitsPerSecond:4_000_000,audioBitsPerSecond:160_000}); } catch (_) {}
+    try { return new MediaRecorder(stream,{mimeType,videoBitsPerSecond:6_000_000,audioBitsPerSecond:160_000}); } catch (_) {}
   }
-  return new MediaRecorder(stream,{videoBitsPerSecond:4_000_000,audioBitsPerSecond:160_000});
+  return new MediaRecorder(stream,{videoBitsPerSecond:6_000_000,audioBitsPerSecond:160_000});
 }
 
 async function startChartRender() {
@@ -451,6 +481,11 @@ async function startChartRender() {
   gameplayScene.layout();
   gameplayScene.setRenderWatermark(true);
   try {
+    // Start renders with a fresh worker so its hook state matches time zero.
+    // Waiting prevents onReset/onStart from being dropped during compilation.
+    modchart.load(activeModchartSource,gameplayScene.modchartState());
+    await modchart.waitUntilReady();
+    gameplayScene.resetNotes();
     if (!recordingAudioContext) {
       recordingAudioContext=new AudioContext();
       recordingAudioSource=recordingAudioContext.createMediaElementSource(audio);
@@ -459,7 +494,7 @@ async function startChartRender() {
       recordingAudioSource.connect(recordingAudioDestination);
     }
     await recordingAudioContext.resume();
-    const stream=phaserGame.canvas.captureStream(30);
+    const stream=phaserGame.canvas.captureStream(60);
     for (const track of recordingAudioDestination.stream.getAudioTracks()) stream.addTrack(track);
     recordingChunks=[];
     chartRecorder=createRecorder(stream);
@@ -468,6 +503,7 @@ async function startChartRender() {
     chartRecorder.onstop=() => finishChartRender(true);
     chartRecorder.start(1000);
     clock.seek(0);
+    modchart.hook('onStart',gameplayScene.modchartState());
     await clock.start();
   } catch (error) {
     console.error(error);
@@ -515,6 +551,7 @@ async function launchGame() {
   $('loadingMessage').textContent = 'LOADING CHART';
   await Promise.all([unlock, waitForGameplay(), waitForAudio()]);
   if (token !== launchToken) return;
+  refreshGameplaySurface();
   if (!await runCountdown(token)) return;
   modchart.hook('onStart',gameplayScene.modchartState());
   await clock.start();
@@ -558,8 +595,8 @@ function showResults(failed = false) {
   clock.pause();
   pauseMenu.classList.add('hidden');
   const accuracy = hits + misses ? hits / (hits + misses) * 100 : 0;
-  const grade = failed ? 'F' : accuracy >= 98 ? 'S' : accuracy >= 90 ? 'A' : accuracy >= 80 ? 'B' : accuracy >= 70 ? 'C' : 'D';
-  $('resultLabel').textContent = failed ? 'RUN FAILED' : 'SONG COMPLETE';
+  const grade = practiceRun ? 'P' : failed ? 'F' : accuracy >= 98 ? 'S' : accuracy >= 90 ? 'A' : accuracy >= 80 ? 'B' : accuracy >= 70 ? 'C' : 'D';
+  $('resultLabel').textContent = practiceRun ? 'PRACTICE COMPLETE · SCORE NOT COUNTED' : failed ? 'RUN FAILED' : 'SONG COMPLETE';
   $('resultTitle').textContent = currentSongTitle;
   $('resultGrade').textContent = grade;
   $('finalScore').textContent = String(score).padStart(6, '0');
@@ -664,10 +701,10 @@ $('customPlayerInput').onchange=event => {
 $('clearCustomPlayer').onclick=() => { playerAppearance.customImage=null; playerAppearance.customImageName=''; applyAppearance(); };
 applyAppearance();
 
-const pages = { title:'titlePage', songs:'songsPage', game:'gamePage', editor:'editorPage', settings:'settingsPage', credits:'creditsPage', results:'resultsPage' };
-const titles = { title:'TITLE', songs:'SONG SELECT', game:'GAMEPLAY', editor:'CHART EDITOR', settings:'SETTINGS', credits:'CREDITS', results:'RESULTS' };
+const pages = { splash:'splashPage', title:'titlePage', songs:'songsPage', game:'gamePage', editor:'editorPage', settings:'settingsPage', credits:'creditsPage', results:'resultsPage' };
+const titles = { splash:'TITLE', title:'MENU', songs:'SONG SELECT', game:'GAMEPLAY', editor:'CHART EDITOR', settings:'SETTINGS', credits:'CREDITS', results:'RESULTS' };
 const backTargets = { songs:'title', editor:'title', settings:'title', credits:'title', results:'songs' };
-let currentPage='title';
+let currentPage='splash';
 const pageAnimations=new WeakMap();
 function animatePage(page) {
   if (document.body.classList.contains('reduced-motion')||typeof page.animate!=='function') return;
@@ -691,6 +728,7 @@ function showPage(name) {
   incoming.classList.remove('hidden');
   animatePage(incoming);
   currentPage=name;
+  document.body.classList.toggle('title-splash-active',name==='splash');
   $('pageTitle').textContent = titles[name];
   if (name !== 'game') { launchToken++; loadingScreen.classList.add('hidden'); }
   if (name !== 'game') pauseMenu.classList.add('hidden');
@@ -708,9 +746,10 @@ function showPage(name) {
 }
 
 document.querySelectorAll('[data-page]').forEach(button => button.onclick = () => showPage(button.dataset.page));
+$('enterGame').onclick=() => showPage('title');
 document.addEventListener('pointerdown',event=>{
   const control=event.target.closest('button,.file-button,.song-card');
-  if (!control||document.body.classList.contains('reduced-motion')) return;
+  if (!control||control.id==='enterGame'||document.body.classList.contains('reduced-motion')) return;
   control.classList.remove('ui-press'); void control.offsetWidth; control.classList.add('ui-press');
   setTimeout(()=>control.classList.remove('ui-press'),280);
 },{passive:true});
@@ -762,9 +801,16 @@ window.addEventListener('keydown', e => {
   if (capturingBinding) {
     e.preventDefault();
     if (e.code==='Escape') capturingBinding=null;
-    else if (e.code==='KeyL'||e.code==='Backquote') window.alert('That key is reserved by RYŌKO.');
+    else if (e.code==='KeyL'||e.code==='KeyP'||e.code==='Backquote') window.alert('That key is reserved by RYŌKO.');
     else { input.setBinding(capturingBinding,e.code); capturingBinding=null; saveBindings(); }
     renderKeybinds();
+    return;
+  }
+  if (currentPage==='splash') {
+    if (!['ShiftLeft','ShiftRight','ControlLeft','ControlRight','AltLeft','AltRight','MetaLeft','MetaRight'].includes(e.code)) {
+      e.preventDefault();
+      showPage('title');
+    }
     return;
   }
   if (e.code==='Backquote') { e.preventDefault(); startChartRender(); return; }
@@ -772,6 +818,9 @@ window.addEventListener('keydown', e => {
   if (endingRun && !$('gamePage').classList.contains('hidden')) { e.preventDefault(); return; }
   if (e.code==='KeyL' && !$('gamePage').classList.contains('hidden')) {
     e.preventDefault(); toggleBotplay(); return;
+  }
+  if (e.code==='KeyP' && !$('gamePage').classList.contains('hidden')) {
+    e.preventDefault(); togglePractice(); return;
   }
   if (e.code === 'Escape' && !$('gamePage').classList.contains('hidden')) {
     e.preventDefault();
@@ -847,4 +896,4 @@ $('resetSettings').onclick = () => {
 applySettings();
 updateHud();
 loop();
-requestAnimationFrame(() => focusFirstControl('title'));
+requestAnimationFrame(() => $('enterGame').focus({preventScroll:true}));

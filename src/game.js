@@ -58,7 +58,7 @@ practiceIndicator.textContent='PRACTICE · SCORE DISABLED';
 $('arena').appendChild(practiceIndicator);
 const pauseMenu = document.createElement('div');
 pauseMenu.className = 'pause-menu hidden';
-pauseMenu.innerHTML = '<div class="pause-card"><div class="pause-art"><img alt="Pause character art" hidden></div><div class="pause-content"><p class="eyebrow">GAME PAUSED</p><h2>Take a breath.</h2><button id="resumeGame" class="primary">Resume</button><button id="restartPaused">Restart</button><button id="quitPaused">Quit to Songs</button></div></div>';
+pauseMenu.innerHTML = '<div class="pause-card"><div class="pause-art"><img alt="Pause character art" hidden></div><div class="pause-content"><p class="eyebrow">GAME PAUSED</p><h2>Take a breath.</h2><button id="resumeGame" class="primary">Resume</button><button id="restartPaused">Restart</button><button id="quitPaused">Quit to Songs</button><button id="pauseExtra" class="pause-extra-toggle" aria-expanded="false" aria-controls="pauseExtraPanel">Extra <span>▾</span></button><div id="pauseExtraPanel" class="pause-extra-panel hidden"><button id="renderPaused">Render 480p · 60 FPS</button><button id="practicePaused">Practice: Off</button><button id="botplayPaused">Botplay: Off</button></div></div></div>';
 pauseMenu.querySelector('img').onerror = event => { event.currentTarget.hidden = true; };
 $('gamePage').appendChild(pauseMenu);
 
@@ -220,6 +220,7 @@ function toggleBotplay() {
   gameplayScene.botplay=botplay;
   botplayIndicator.classList.toggle('hidden',!botplay);
   setFeedback(botplay?'BOTPLAY ON':'BOTPLAY OFF');
+  syncPauseExtras();
 }
 
 function refreshGameplaySurface() {
@@ -242,6 +243,14 @@ function togglePractice() {
   practiceIndicator.classList.toggle('hidden',!practiceMode);
   setFeedback(practiceMode?'PRACTICE ON':'PRACTICE OFF');
   updateHud();
+  syncPauseExtras();
+}
+
+function syncPauseExtras() {
+  $('practicePaused').textContent=`Practice: ${practiceMode?'On':'Off'}`;
+  $('practicePaused').classList.toggle('active',practiceMode);
+  $('botplayPaused').textContent=`Botplay: ${botplay?'On':'Off'}`;
+  $('botplayPaused').classList.toggle('active',botplay);
 }
 
 function registerMiss(note) {
@@ -259,7 +268,7 @@ function registerMiss(note) {
 function setGameplayLocked(locked) {
   inputLocked = locked;
   $('gamePage').classList.toggle('input-locked', locked);
-  document.querySelectorAll('#gamePage .controls button, #start, #restart').forEach(button => { button.disabled = locked; });
+  document.querySelectorAll('#start, #restart').forEach(button => { button.disabled = locked; });
   input.enabled = !locked && !$('gamePage').classList.contains('hidden') && pauseMenu.classList.contains('hidden') && loadingScreen.classList.contains('hidden');
 }
 
@@ -577,6 +586,9 @@ function openPause() {
   clock.pause();
   input.enabled = false;
   pauseMenu.classList.remove('hidden');
+  $('pauseExtraPanel').classList.add('hidden');
+  $('pauseExtra').setAttribute('aria-expanded','false');
+  syncPauseExtras();
   $('start').textContent = 'Resume';
 }
 
@@ -625,6 +637,13 @@ $('restart').onclick = launchGame;
 $('resumeGame').onclick = resumeGame;
 $('restartPaused').onclick = launchGame;
 $('quitPaused').onclick = () => showPage('songs');
+$('pauseExtra').onclick=() => {
+  const opening=$('pauseExtraPanel').classList.toggle('hidden')===false;
+  $('pauseExtra').setAttribute('aria-expanded',String(opening));
+};
+$('practicePaused').onclick=togglePractice;
+$('botplayPaused').onclick=toggleBotplay;
+$('renderPaused').onclick=() => { pauseMenu.classList.add('hidden'); startChartRender(); };
 $('retrySong').onclick = launchGame;
 
 let capturingBinding=null;
@@ -654,13 +673,17 @@ keybindSection.querySelector('#resetKeybinds').onclick=() => { input.resetBindin
 renderKeybinds();
 
 const defaultNoteColors={left:'#ff68ae',down:'#55c8ff',up:'#55e38e',right:'#ffd45c'};
-const defaultAppearance={shape:'◆',playerColor:'#ffffff',noteColors:{...defaultNoteColors},trail:true,customImage:null,customImageName:''};
+const defaultAppearance={shape:'◆',playerColor:'#ffffff',noteColors:{...defaultNoteColors},noteColorVersion:2,trail:true,customImage:null,customImageName:''};
 let playerAppearance={...defaultAppearance,noteColors:{...defaultNoteColors}};
 try {
   const savedAppearance=JSON.parse(localStorage.getItem('ryoko-appearance'));
   if (savedAppearance) {
-    const legacyColor=savedAppearance.noteColor;
-    playerAppearance={...playerAppearance,...savedAppearance,noteColors:{...defaultNoteColors,...(legacyColor?Object.fromEntries(['left','down','up','right'].map(direction=>[direction,legacyColor])):{}),...(savedAppearance.noteColors||{})}};
+    const savedColors=savedAppearance.noteColors||{};
+    const colorValues=['left','down','up','right'].map(direction=>savedColors[direction]).filter(Boolean);
+    // Older builds expanded one legacy color into all four slots. Repair that
+    // profile once; versioned profiles preserve intentional equal colors.
+    const legacyUnified=savedAppearance.noteColorVersion!==2&&colorValues.length===4&&new Set(colorValues.map(value=>value.toLowerCase())).size===1;
+    playerAppearance={...playerAppearance,...savedAppearance,noteColorVersion:2,noteColors:{...defaultNoteColors,...(legacyUnified?{}:savedColors)}};
     delete playerAppearance.noteColor;
   }
 } catch (_) {}

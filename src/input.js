@@ -27,10 +27,6 @@ export class InputManager {
     };
     window.addEventListener('touchstart',begin,{passive:true}); window.addEventListener('touchend',end,{passive:true});
     window.addEventListener('mousedown',begin); window.addEventListener('mouseup',end);
-    document.querySelectorAll('.controls button').forEach(button => button.addEventListener('pointerdown',event => {
-      if (!this.enabled) return;
-      event.preventDefault(); this.onDirection(button.dataset.dir);
-    }));
   }
 
   setBinding(direction,code) { if (this.bindings[direction]) this.bindings[direction]=[code]; }

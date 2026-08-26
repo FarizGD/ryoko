@@ -41,10 +41,15 @@ export class GameplayScene extends Phaser.Scene {
     this.guide = this.add.graphics();
     this.receptors = new Map();
     for (const direction of Object.keys(VECTORS)) {
+      const directionColor=this.appearance.noteColors?.[direction]||COLORS[direction];
       const receptor=this.add.text(0,0,ARROWS[direction],{
-        fontFamily:'system-ui',fontSize:'28px',fontStyle:'bold',color:COLORS[direction],
-        backgroundColor:'#211e35',padding:{x:11,y:6},stroke:'#ffffff',strokeThickness:1
-      }).setOrigin(.5).setAlpha(.9).setDepth(1);
+        fontFamily:'system-ui',fontSize:'32px',fontStyle:'bold',color:directionColor,
+        backgroundColor:'#211e35',padding:{x:14,y:10},stroke:'#ffffff',strokeThickness:1
+      }).setOrigin(.5).setAlpha(.9).setDepth(4).setInteractive({useHandCursor:true});
+      receptor.on('pointerdown',pointer => {
+        pointer.event?.preventDefault?.();
+        this.pulse(direction);
+      });
       this.receptors.set(direction,receptor);
     }
     this.player = this.add.text(0,0,this.appearance.shape,{fontFamily:'system-ui',fontSize:'42px',color:this.appearance.playerColor}).setOrigin(.5).setDepth(3);
@@ -78,7 +83,7 @@ export class GameplayScene extends Phaser.Scene {
     const { width, height } = this.scale;
     this.drawBackground();
     this.player?.setPosition(width/2, height/2);
-    const cx=width/2,cy=height/2,targetDistance=Math.min(78,width*.14,height*.14);
+    const cx=width/2,cy=height/2,targetDistance=Math.min(124,width*.22,height*.2);
     this.guide?.clear().lineStyle(2,0x8f7cff,.16)
       .lineBetween(0,cy,cx-targetDistance,cy).lineBetween(cx+targetDistance,cy,width,cy)
       .lineBetween(cx,0,cx,cy-targetDistance).lineBetween(cx,cy+targetDistance,cx,height)
@@ -228,7 +233,11 @@ export class GameplayScene extends Phaser.Scene {
       if (this.appearance.customImage) this.loadCustomPlayer(this.appearance.customImage);
       else this.useShapePlayer();
     }
-    for (const [note,view] of this.noteViews) if (!note.auto) view.setBackgroundColor(this.appearance.noteColors?.[note.direction]||'#8f7cff');
+    for (const [direction,receptor] of this.receptors || []) receptor.setColor(this.appearance.noteColors?.[direction]||COLORS[direction]);
+    for (const [note,view] of this.noteViews) if (!note.auto) {
+      const color=this.appearance.noteColors?.[note.direction]||'#8f7cff';
+      view.setColor(color).setStroke(color,2);
+    }
   }
 
   useShapePlayer() {
@@ -333,16 +342,16 @@ export class GameplayScene extends Phaser.Scene {
       visible.add(note);
       let view=this.noteViews.get(note);
       if (!view) {
-        const color=note.auto?'#4d4964':(this.appearance.noteColors?.[note.direction]||'#8f7cff');
+        const color=note.auto?'#aaa6c4':(this.appearance.noteColors?.[note.direction]||'#8f7cff');
         view=this.add.text(cx,cy,ARROWS[note.direction]||'◆',{
-          fontFamily:'system-ui',fontSize:note.auto?'28px':'34px',fontStyle:'bold',color:'#ffffff',
-          backgroundColor:color,padding:{x:note.auto?7:9,y:note.auto?3:5},stroke:'#090812',strokeThickness:3
+          fontFamily:'system-ui',fontSize:note.auto?'28px':'34px',fontStyle:'bold',color,
+          backgroundColor:note.auto?'#292735':'#171326',padding:{x:note.auto?7:9,y:note.auto?3:5},stroke:color,strokeThickness:note.auto?1:2
         }).setOrigin(.5).setDepth(note.auto?1:2);
         this.noteViews.set(note,view);
       }
       const progress=Phaser.Math.Clamp(delta/approachMs,0,1);
       const [vx,vy]=VECTORS[note.direction]||[0,0];
-      const targetDistance=Math.min(78,this.scale.width*.14,this.scale.height*.14)+(note.auto?34:0);
+      const targetDistance=Math.min(124,this.scale.width*.22,this.scale.height*.2)+(note.auto?34:0);
       const travel=(vx?this.scale.width:this.scale.height)/2+50-targetDistance;
       const distance=targetDistance+progress*travel;
       const missFade=delta<0?Phaser.Math.Clamp(1+delta/180,0,1):1;

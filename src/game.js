@@ -268,7 +268,7 @@ function registerMiss(note) {
 function setGameplayLocked(locked) {
   inputLocked = locked;
   $('gamePage').classList.toggle('input-locked', locked);
-  document.querySelectorAll('#start, #restart').forEach(button => { button.disabled = locked; });
+  document.querySelectorAll('#start').forEach(button => { button.disabled = locked; });
   input.enabled = !locked && !$('gamePage').classList.contains('hidden') && pauseMenu.classList.contains('hidden') && loadingScreen.classList.contains('hidden');
 }
 
@@ -548,6 +548,9 @@ function finishChartRender(save) {
 
 async function launchGame() {
   const token = ++launchToken;
+  // Restart may be requested from the pause overlay. Always close it before
+  // resetting so the countdown and resumed gameplay are visible and active.
+  pauseMenu.classList.add('hidden');
   reset();
   setGameplayLocked(true);
   audio.muted = true;
@@ -633,7 +636,6 @@ $('pauseArtInput').onchange = e => {
 };
 $('exportPackage').onclick = exportPackage;
 $('start').onclick = () => clock.running ? openPause() : togglePlayback($('start'));
-$('restart').onclick = launchGame;
 $('resumeGame').onclick = resumeGame;
 $('restartPaused').onclick = launchGame;
 $('quitPaused').onclick = () => showPage('songs');

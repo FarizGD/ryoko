@@ -13,7 +13,6 @@
     <header class="topbar">
       <button class="brand" data-page="title">RYŌKO</button>
       <span id="pageTitle">TITLE</span>
-      <button class="nav-home" data-page="title">Home</button>
     </header>
 
     <section id="splashPage" class="page splash-page" aria-label="RYŌKO title screen">
@@ -50,11 +49,11 @@
     </section>
 
     <section id="gamePage" class="page hidden">
-      <div class="page-head compact"><button data-page="songs">Quit</button><div class="now-playing"><small>NOW PLAYING</small><strong id="gameSongTitle">Prototype Beat</strong></div><button id="restart">Restart</button></div>
+      <div class="page-head compact gameplay-head"><div class="now-playing"><small>NOW PLAYING</small><strong id="gameSongTitle">Prototype Beat</strong></div><button id="start" class="primary">Pause</button></div>
       <div class="hud"><div><span id="combo">0</span><small> COMBO</small></div><div id="score">000000</div><div class="health-wrap"><small>HEALTH</small><div class="health-track"><div id="healthFill" class="health-fill"></div></div></div></div>
       <div class="judgment-counters"><span><b id="perfectCount">0</b> PERFECT</span><span><b id="goodCount">0</b> GOOD</span><span><b id="badCount">0</b> BAD</span><span><b id="missCount">0</b> MISS</span><span id="renderStatus" class="render-status hidden">● RENDERING 480P · 60 FPS</span></div>
       <div id="arena" class="arena"><div id="feedback">READY</div></div>
-      <div class="transport"><button id="start" class="primary">Start</button><span id="time">0:00.000</span></div>
+      <div class="transport"><span id="time">0:00.000</span></div>
     </section>
 
     <section id="editorPage" class="page hidden">

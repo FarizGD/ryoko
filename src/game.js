@@ -921,4 +921,49 @@ $('resetSettings').onclick = () => {
 applySettings();
 updateHud();
 loop();
+
+const INDONESIAN_UI={
+  'TITLE':'JUDUL','MENU':'MENU','SONG SELECT':'PILIH LAGU','GAMEPLAY':'PERMAINAN','CHART EDITOR':'EDITOR CHART','SETTINGS':'PENGATURAN','CREDITS':'KREDIT','RESULTS':'HASIL',
+  'SURPASS THE BEAT':'LAMPAUI IRAMA','Move through the rhythm. Read the direction. Strike on time.':'Bergerak mengikuti irama. Baca arah. Tekan tepat waktu.',
+  'Play':'Main','Chart Editor':'Editor Chart','Settings':'Pengaturan','Credits':'Kredit','CHOOSE YOUR TRACK':'PILIH LAGUMU','Song Selection':'Pilihan Lagu','Back':'Kembali',
+  'Local content':'Konten lokal','Load a complete .ryoko song package, or choose audio separately for charting.':'Muat paket lagu .ryoko lengkap, atau pilih audio terpisah untuk membuat chart.',
+  'Load .ryoko':'Muat .ryoko','Choose audio':'Pilih audio','NOW PLAYING':'SEDANG DIMAINKAN','Pause':'Jeda','Resume':'Lanjut','Start':'Mulai',
+  'HEALTH':'NYAWA','COMBO':'KOMBO','PRACTICE · SCORE DISABLED':'LATIHAN · SKOR DINONAKTIFKAN','GAME PAUSED':'PERMAINAN DIJEDA','Take a breath.':'Istirahat sejenak.',
+  'Restart':'Mulai Ulang','Quit to Songs':'Keluar ke Pilihan Lagu','Extra':'Lainnya','Render 480p · 60 FPS':'Render 480p · 60 FPS','Practice: Off':'Latihan: Mati','Practice: On':'Latihan: Nyala','Botplay: Off':'Botplay: Mati','Botplay: On':'Botplay: Nyala',
+  'TOOLS':'ALAT','Load song':'Muat lagu','Player':'Pemain','Opponent':'Lawan','Tap':'Ketuk','Swipe':'Geser','Hold':'Tahan','Previous':'Sebelumnya','Next':'Berikutnya',
+  'Test Chart':'Tes Chart','Export JSON':'Ekspor JSON','Import JSON':'Impor JSON','Export .ryoko':'Ekspor .ryoko','Delete Selected':'Hapus Pilihan',
+  'PREFERENCES':'PREFERENSI','Master volume':'Volume utama','Note approach time':'Waktu datang note','Ghost tapping':'Ghost tapping','Ignore stray inputs':'Abaikan input liar','Reduced motion':'Kurangi gerakan','Reset settings':'Reset pengaturan',
+  'Gameplay keybinds':'Tombol permainan','Select a control, then press a key':'Pilih kontrol, lalu tekan tombol','Reset keybinds':'Reset tombol','Player appearance':'Tampilan pemain','Applied immediately':'Langsung diterapkan','Upload PNG or SVG':'Unggah PNG atau SVG','Use built-in':'Gunakan bawaan','Player trail':'Jejak pemain',
+  'THE PROJECT':'PROYEK INI','Creator':'Pembuat','Game engine':'Mesin game','Development tooling':'Alat pengembangan','License':'Lisensi','Built as a playable prototype for Android and PC.':'Dibuat sebagai prototipe yang dapat dimainkan di Android dan PC.',
+  'SONG COMPLETE':'LAGU SELESAI','RUN FAILED':'PERMAINAN GAGAL','PRACTICE COMPLETE · SCORE NOT COUNTED':'LATIHAN SELESAI · SKOR TIDAK DIHITUNG','SCORE':'SKOR','Accuracy':'Akurasi','Max combo':'Kombo maksimum','Misses':'Meleset','Retry':'Coba Lagi',
+  'PRESS ANY KEY · TAP TO START':'TEKAN TOMBOL APA SAJA · KETUK UNTUK MULAI'
+};
+const englishText=new WeakMap();
+let uiLanguage=localStorage.getItem('ryoko-language')==='id'?'id':'en';
+function translateUi(root=document.body) {
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  for (let node=walker.nextNode();node;node=walker.nextNode()) {
+    const current=node.nodeValue,trimmed=current.trim();
+    if (!trimmed) continue;
+    if (!englishText.has(node)) englishText.set(node,trimmed);
+    const english=englishText.get(node);
+    const translated=uiLanguage==='id'?(INDONESIAN_UI[english]||english):english;
+    if (trimmed!==translated) node.nodeValue=current.replace(trimmed,translated);
+  }
+  const pageTitleText=uiLanguage==='id'?(INDONESIAN_UI[titles[currentPage]]||titles[currentPage]):titles[currentPage];
+  if ($('pageTitle').textContent!==pageTitleText) $('pageTitle').textContent=pageTitleText;
+  $('languageToggle').classList.toggle('is-id',uiLanguage==='id');
+  $('languageToggle').setAttribute('aria-label',uiLanguage==='id'?'Ganti bahasa ke Inggris':'Switch language to Indonesian');
+  document.documentElement.lang=uiLanguage;
+}
+$('languageToggle').onclick=()=>{
+  uiLanguage=uiLanguage==='en'?'id':'en';
+  localStorage.setItem('ryoko-language',uiLanguage);
+  translateUi();
+};
+new MutationObserver(records=>{
+  if (uiLanguage!=='id') return;
+  for (const record of records) for (const node of record.addedNodes) translateUi(node.nodeType===Node.TEXT_NODE?node.parentNode:node);
+}).observe(document.body,{subtree:true,childList:true});
+translateUi();
 requestAnimationFrame(() => $('enterGame').focus({preventScroll:true}));
